@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql-server
+    hostname: a61e33dff988
+    user: mssql
+    mac_address: 02:42:ac:11:00:02
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${SA_PASSWORD}
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - MSSQL_RPC_PORT=135
+      - CONFIG_EDGE_BUILD=
+      - MSSQL_PID=developer
+    networks:
+      - bridge
+    ports:
+      - "1400:1433"
+    restart: "no"
+    labels:
+      com.microsoft.product: "Microsoft SQL Server"
+      com.microsoft.version: "16.0.4135.4"
+      org.opencontainers.image.ref.name: "ubuntu"
+      org.opencontainers.image.version: "22.04"
+      vendor: "Microsoft"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: "runc"
+
+networks:
+  bridge:
+    external: true
