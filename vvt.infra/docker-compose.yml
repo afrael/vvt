@@ -4,9 +4,7 @@ services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql-server
-    hostname: a61e33dff988
     user: mssql
-    mac_address: 02:42:ac:11:00:02
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${SA_PASSWORD}

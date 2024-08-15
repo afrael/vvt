@@ -14,11 +14,7 @@ public class FileUploadRepository : IFileUploadRepository
 
         using (var db = new VvtContext())
         {
-            // add then new records
-            foreach (var f in fileUploads)
-            {
-                db.FileUploads.Add(f);
-            }
+            await db.FileUploads.AddRangeAsync(fileUploads);
             try
             {
                 var result = await db.SaveChangesAsync();

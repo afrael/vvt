@@ -14,11 +14,7 @@ public class EmployeeRepository : IEmployeeRepository
 
         using (var db = new VvtContext())
         {
-            // add then new records
-            foreach (var e in employees)
-            {
-                db.Employees.Add(e);
-            }
+            await db.Employees.AddRangeAsync(employees);
             try
             {
                 var result = await db.SaveChangesAsync();

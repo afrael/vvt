@@ -14,11 +14,7 @@ public class CompanyRepository : ICompanyRepository
 
         using (var db = new VvtContext())
         {
-            // add then new records
-            foreach (var c in companies)
-            {
-                db.Companies.Add(c);
-            }
+            await db.Companies.AddRangeAsync(companies);
             try
             {
                 var result = await db.SaveChangesAsync();
