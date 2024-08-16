@@ -24,26 +24,60 @@ public class UploadService : IUploadService
         _employeeService = employeeService;
     }
 
-    private IEnumerable<CsvUploadRecord> ParseCsvFile(RawUploadDto rawUpload)
+    private IEnumerable<CsvUploadRecord>? ParseCsvFile(RawUploadDto rawUpload)
     {
         // Add exception handling
         IEnumerable<CsvUploadRecord> records;
         using (var reader = new StringReader(rawUpload.RawLine))
         using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
         {
+            if(!ValidateCSVHeaders(csv))
+            {
+                return null;
+            }
             records = csv.GetRecords<CsvUploadRecord>().ToList();
         }
 
         return records;
     }
 
-    private IEnumerable<Employee> GetEmployeeRecords(List<CsvUploadRecord> recordList)
+    private bool ValidateCSVHeaders(CsvReader csv)
+    {
+        // move to external configuration
+        var headers = new List<string>() { "CompanyId", "CompanyCode", "CompanyDescription", "EmployeeNumber", "EmployeeFirstName", "EmployeeLastName", "EmployeeEmail", "EmployeeDepartment", "HireDate", "ManagerEmployeeNumber" };
+        try
+        {
+            csv.Read();
+            if(!csv.ReadHeader())
+            {
+                return false;
+            }
+            
+            var csvHeader = csv.HeaderRecord ?? new List<string>().ToArray();
+            headers = headers.Select(h => h.Trim().ToUpper()).ToList();
+            foreach (var h in csvHeader)
+            {
+                if (!headers.Contains(h.Trim().ToUpper()))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private IEnumerable<Employee> ProcessEmployeeRecords(List<CsvUploadRecord> recordList)
     {
         // check for nulls
         // Use TryParse instead
         // We need to save the unprocessed ones, or return an additional
         // collection
-        var employeeCollection = recordList
+        var employees = recordList
            .Select(e => new Employee(e.EmployeeNumber,
                                      e.EmployeeFirstName,
                                      e.EmployeeLastName,
@@ -54,54 +88,62 @@ public class UploadService : IUploadService
                                      int.Parse(e.CompanyId)))
            .ToList();
 
-        // Use brute force to check that an employeeNumber is unique 
-        // per company
-        var uniqueEmployeePerCompany = new Dictionary<string, Employee>();
-        var rejectedEmployeeDupeCompany = new List<Employee>();
-        foreach (var employee in employeeCollection)
-        {
-            var compKey = $"{employee.CompanyId}-{employee.EmployeeNumber}";
-            if (!uniqueEmployeePerCompany.TryAdd(compKey, employee))
-            {
-                rejectedEmployeeDupeCompany.Add(employee);
-            }
-        }
+        // validate employee company affiliation (employee number is unique per company) 
+        // move to employee service
+        var validEmployeeCompanyAffiliationResults = ValidateEmployees(employees);
 
-        // Use brute force to check that the manager of a given employee
-        // should exist in the same company
-        var employeesWithoutManager = new List<Employee>();
-        var uniqueEmployeePerCompanyAndManagerExistsInCompany = new List<Employee>();
-        var rejectedEmployeeMgrNonCompany = new List<Employee>();
-        foreach (var employee in uniqueEmployeePerCompany.Values)
+        // get non-managed employees (top-level employees)
+        var nonManagedEmployees = employees.Where(e => string.IsNullOrWhiteSpace(e.ManagerEmployeeNumber));
+
+        //move to employee service
+        var employeeManagerCompanyAffiliationResults = ValidateEmployeeManagerCompanyAffiliation(validEmployeeCompanyAffiliationResults.Valid.Values, employees);
+        var validEmployeeManagerCompanyAffiliation = employeeManagerCompanyAffiliationResults.Valid.ToList();
+        validEmployeeManagerCompanyAffiliation.AddRange(nonManagedEmployees);
+        return validEmployeeManagerCompanyAffiliation;
+    }
+
+    private (IEnumerable<Employee> Valid, IEnumerable<Employee> Invalid) 
+        ValidateEmployeeManagerCompanyAffiliation(IEnumerable<Employee> validatedEmployees, IEnumerable<Employee> allEmployees)
+    {
+        var validEmployeeCompanyManagerAffiliation = new List<Employee>();
+        var invalidEmployeeCompanyManagerAffiliation = new List<Employee>();
+        foreach (var employee in validatedEmployees.Where(e => !string.IsNullOrWhiteSpace(e.ManagerEmployeeNumber)))
         {
             int managersCompanyId = 0;
             // Get Manager's company
-            if (!string.IsNullOrWhiteSpace(employee.ManagerEmployeeNumber))
-            {
-                var manager = employeeCollection
-                            .FirstOrDefault(e => e.ManagerEmployeeNumber == employee.ManagerEmployeeNumber);
-                if (manager != null)
-                {
-                    managersCompanyId = manager.CompanyId;
-                }
-            }
-            else
-            {
-                employeesWithoutManager.Add(employee);
-            }
-
+            var manager = allEmployees.FirstOrDefault(e => e.ManagerEmployeeNumber == employee.ManagerEmployeeNumber);
+            managersCompanyId = manager != null ? manager.CompanyId : 0;
+            
             if (managersCompanyId == employee.CompanyId)
             {
-                uniqueEmployeePerCompanyAndManagerExistsInCompany.Add(employee);
+                validEmployeeCompanyManagerAffiliation.Add(employee);
             }
             else
             {
-                rejectedEmployeeMgrNonCompany.Add(employee);
+                invalidEmployeeCompanyManagerAffiliation.Add(employee);
             }
-
         }
-        uniqueEmployeePerCompanyAndManagerExistsInCompany.AddRange(employeesWithoutManager);
-        return uniqueEmployeePerCompanyAndManagerExistsInCompany;
+        return (validEmployeeCompanyManagerAffiliation, invalidEmployeeCompanyManagerAffiliation);
+    }
+
+
+    private (IDictionary<string, Employee> Valid, IEnumerable<Employee> Invalid) ValidateEmployees(IEnumerable<Employee> employees)
+    {
+
+        // Use brute force to check that an employeeNumber is unique 
+        // per company
+        var validEmployeeCompanyAffiliationResults = new Dictionary<string, Employee>();
+        var invalidEmployeeCompanyAffiliationResults = new List<Employee>();
+        foreach (var employee in employees)
+        {
+            var compKey = $"{employee.CompanyId}-{employee.EmployeeNumber}";
+            if (!validEmployeeCompanyAffiliationResults.TryAdd(compKey, employee))
+            {
+                invalidEmployeeCompanyAffiliationResults.Add(employee);
+            }
+        }
+
+        return (validEmployeeCompanyAffiliationResults, invalidEmployeeCompanyAffiliationResults);
     }
 
     private IEnumerable<Company> GetCompanyRecords(IEnumerable<CsvUploadRecord> parsedRecords)
@@ -191,7 +233,7 @@ public class UploadService : IUploadService
         // Verify that the employee number is unique per company
         // Verify that the employee's manager is part of the company
         // Include top level managers, employees without a managerEmployeeNumber
-        var employeeRecords = GetEmployeeRecords(recordList);
+        var employeeRecords = ProcessEmployeeRecords(recordList);
 
         // var save employee records to repository
         result = await SaveEmployeeRecords(employeeRecords);

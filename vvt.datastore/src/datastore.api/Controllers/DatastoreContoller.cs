@@ -23,17 +23,16 @@ public class DatastoreController : ControllerBase
         try
         {
             _logger.LogInformation($"vvt.controller: File Received at {DateTime.Now}");
+
+            // check if user uploaded empty file
+            if(file.Length == 0)
+            {
+                return BadRequest("The File cannot be empty.");
+            }
+
             using (var streamReader = new StreamReader(file.OpenReadStream()))
             {
-                var content = await streamReader.ReadToEndAsync();
-                _logger.LogInformation($"vvt.controller: Received {content.Length} bytes");
-                var clearResult = await _uploadService.ClearUploadData();
-                if (clearResult.Result != vvt.common.lib.enums.OperationResults.Sucessfull)
-                {
-                    return BadRequest(clearResult.Message);
-                }
-                var result = await _uploadService.SaveUpload(new RawUploadDto(content));
-                return Ok(result.Message);
+                return await ProcessFileUpload(streamReader);
             }
         }
         catch (Exception ex)
@@ -42,4 +41,16 @@ public class DatastoreController : ControllerBase
         }
     }
 
+    private async Task<ActionResult> ProcessFileUpload(StreamReader streamReader)
+    {
+        var content = await streamReader.ReadToEndAsync();
+        _logger.LogInformation($"vvt.controller: Received {content.Length} bytes");
+        var clearResult = await _uploadService.ClearUploadData();
+        if (clearResult.Result != vvt.common.lib.enums.OperationResults.Sucessfull)
+        {
+            return BadRequest(clearResult.Message);
+        }
+        var result = await _uploadService.SaveUpload(new RawUploadDto(content));
+        return Ok(result.Message);
+    }
 }
