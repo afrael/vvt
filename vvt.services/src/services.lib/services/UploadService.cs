@@ -129,17 +129,26 @@ public class UploadService : IUploadService
 
     private (IDictionary<string, Employee> Valid, IEnumerable<Employee> Invalid) ValidateEmployees(IEnumerable<Employee> employees)
     {
-
-        // Use brute force to check that an employeeNumber is unique 
-        // per company
+        // Filter out any additional employees that share the same number, only the first one
+        // seen will be accepted
         var validEmployeeCompanyAffiliationResults = new Dictionary<string, Employee>();
         var invalidEmployeeCompanyAffiliationResults = new List<Employee>();
+        var employeesPerCompany = new Dictionary<string, Employee>();
         foreach (var employee in employees)
         {
-            var compKey = $"{employee.CompanyId}-{employee.EmployeeNumber}";
-            if (!validEmployeeCompanyAffiliationResults.TryAdd(compKey, employee))
+            if(!employeesPerCompany.TryAdd(employee.EmployeeNumber, employee))
             {
                 invalidEmployeeCompanyAffiliationResults.Add(employee);
+            }
+        }
+        // Use brute force to check that an employeeNumber is unique 
+        // per company
+        foreach (var emp in employeesPerCompany.Values)
+        {
+            var compKey = $"{emp.CompanyId}-{emp.EmployeeNumber}";
+            if (!validEmployeeCompanyAffiliationResults.TryAdd(compKey, emp))
+            {
+                invalidEmployeeCompanyAffiliationResults.Add(emp);
             }
         }
 

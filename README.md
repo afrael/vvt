@@ -6,6 +6,7 @@ A dotnet webapi application that processes a CSV file, persists the records to a
 
 1. All employees that have a blank hire date will have their hire date set to 01/01/01 `Datetime.MinValue`.
 2. All employee that have a blank ManagerEmployeeNumber are considered top-level managers.
+3. The employee number is unique, the first one seen will be the one considered valid.
 
 ## Validations
 
