@@ -40,6 +40,57 @@ public class EmployeeService : IEmployeeService
         return await _employeeRepository.DeleteAllAsync();
     }
 
+    public (IDictionary<string, Employee> Valid, IEnumerable<Employee> Invalid) ValidateEmployees(IEnumerable<Employee> employees)
+    {
+        // Filter out any additional employees that share the same number, only the first one
+        // seen will be accepted
+        var validEmployeeCompanyAffiliationResults = new Dictionary<string, Employee>();
+        var invalidEmployeeCompanyAffiliationResults = new List<Employee>();
+        var employeesPerCompany = new Dictionary<string, Employee>();
+        foreach (var employee in employees)
+        {
+            if(!employeesPerCompany.TryAdd(employee.EmployeeNumber, employee))
+            {
+                invalidEmployeeCompanyAffiliationResults.Add(employee);
+            }
+        }
+        // Use brute force to check that an employeeNumber is unique 
+        // per company
+        foreach (var emp in employeesPerCompany.Values)
+        {
+            var compKey = $"{emp.CompanyId}-{emp.EmployeeNumber}";
+            if (!validEmployeeCompanyAffiliationResults.TryAdd(compKey, emp))
+            {
+                invalidEmployeeCompanyAffiliationResults.Add(emp);
+            }
+        }
+        
+        return (validEmployeeCompanyAffiliationResults, invalidEmployeeCompanyAffiliationResults);
+    }
+
+    public (IEnumerable<Employee> Valid, IEnumerable<Employee> Invalid) ValidateEmployeeManagerCompanyAffiliation(IEnumerable<Employee> validatedEmployees, IEnumerable<Employee> allEmployees)
+    {
+        var validEmployeeCompanyManagerAffiliation = new List<Employee>();
+        var invalidEmployeeCompanyManagerAffiliation = new List<Employee>();
+        foreach (var employee in validatedEmployees.Where(e => !string.IsNullOrWhiteSpace(e.ManagerEmployeeNumber)))
+        {
+            int managersCompanyId = 0;
+            // Get Manager's company
+            var manager = allEmployees.FirstOrDefault(e => e.ManagerEmployeeNumber == employee.ManagerEmployeeNumber);
+            managersCompanyId = manager != null ? manager.CompanyId : 0;
+            
+            if (managersCompanyId == employee.CompanyId)
+            {
+                validEmployeeCompanyManagerAffiliation.Add(employee);
+            }
+            else
+            {
+                invalidEmployeeCompanyManagerAffiliation.Add(employee);
+            }
+        }
+        return (validEmployeeCompanyManagerAffiliation, invalidEmployeeCompanyManagerAffiliation);
+    }
+
     public async Task<EmployeeDto?> GetEmployeeByCompanyIdAndEmployeeNumberAsync(int companyId, string employeeNumber)
     {
         var employee = await _employeeRepository.GetByEmployeeNumberAndCompanyIdAsync(employeeNumber, companyId);

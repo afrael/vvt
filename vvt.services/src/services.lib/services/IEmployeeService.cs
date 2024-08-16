@@ -8,5 +8,7 @@ public interface IEmployeeService
 {
     Task<EmployeeDto?> GetEmployeeByCompanyIdAndEmployeeNumberAsync(int companyId, string employeeNumber);
     Task<OperationResult> SaveEmployeesAsync(IEnumerable<Employee> employees);
-    Task<OperationResult> DeleteAllAsync();
+    Task<OperationResult> DeleteAllAsync(); 
+    (IDictionary<string, Employee> Valid, IEnumerable<Employee> Invalid) ValidateEmployees(IEnumerable<Employee> employees);
+    (IEnumerable<Employee> Valid, IEnumerable<Employee> Invalid) ValidateEmployeeManagerCompanyAffiliation(IEnumerable<Employee> validatedEmployees, IEnumerable<Employee> allEmployees);
 }
